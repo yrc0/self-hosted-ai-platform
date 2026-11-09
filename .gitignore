@@ -11,6 +11,7 @@ secrets*
 logs/
 
 .terraform/
+infrastructure/terraform/terraform.tfvars
 *.tfstate
 *.tfstate.*
 crash.log
