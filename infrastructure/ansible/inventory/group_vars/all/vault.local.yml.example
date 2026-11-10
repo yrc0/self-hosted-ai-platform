@@ -1,0 +1,2 @@
+vault_role_id: "replace-with-approle-role-id"
+vault_secret_id: "replace-with-approle-secret-id"

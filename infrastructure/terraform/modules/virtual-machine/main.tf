@@ -69,32 +69,4 @@ resource "vsphere_virtual_machine" "this" {
     }
   }
 
-  extra_config = {
-    "guestinfo.metadata" = base64encode(yamlencode({
-      "instance-id"    = var.name
-      "local-hostname" = var.name
-    }))
-    "guestinfo.metadata.encoding" = "base64"
-    "guestinfo.userdata" = base64gzip(<<-EOT
-      #cloud-config
-      ${yamlencode({
-      users = [
-        {
-          name                = var.guest_username
-          gecos               = var.guest_username
-          sudo                = "ALL=(ALL) NOPASSWD:ALL"
-          shell               = "/bin/bash"
-          lock_passwd         = false
-          ssh_authorized_keys = var.ssh_authorized_keys
-        }
-      ]
-      chpasswd = {
-        expire = false
-        list   = "${var.guest_username}:${var.guest_password}"
-      }
-})}
-    EOT
-)
-"guestinfo.userdata.encoding" = "gzip+base64"
-}
 }

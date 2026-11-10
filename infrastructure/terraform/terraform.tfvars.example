@@ -1,33 +1,28 @@
 vcenter_server     = "vcenter.example.internal"
-vcenter_user       = "terraform@vsphere.local"
-vcenter_password   = "replace-with-vcenter-password"
 vcenter_datacenter = "datacenter-name"
 vcenter_cluster    = "cluster-name"
 vcenter_datastore  = "datastore-name"
 vcenter_network    = "network-or-port-group-name"
 
+vault_address = "https://vault.example.internal:8200"
+
 vms = {
-  netbox-01 = {
-    template            = "Templates/ubuntu-server-template"
-    folder = "AI_Platform"
-    cpus                = 2
-    memory_mb           = 4096
-    disk_sizes_gb       = [50]
-    guest_id            = "ubuntu64Guest"
-    firmware            = "efi"
-    scsi_type           = "lsilogic-sas"
-    ipv4_address        = "172.30.30.10"
-    ipv4_netmask        = 24
-    ipv4_gateway        = "172.30.30.1"
-    dns_servers         = ["172.30.30.2"]
-    dns_domain          = "localdomain"
-    guest_username      = "netbox"
-    ssh_authorized_keys = []
+  example-vm-01 = {
+    template      = "Templates/ubuntu-server-template"
+    folder        = "AI_Platform"
+    cpus          = 2
+    memory_mb     = 4096
+    disk_sizes_gb = [40]
+    guest_id      = "ubuntu64Guest"
+    firmware      = "efi"
+    scsi_type     = "pvscsi"
+    ipv4_address  = "172.30.30.20"
+    ipv4_netmask  = 24
+    ipv4_gateway  = "172.30.30.1"
+    dns_servers   = ["172.30.30.2"]
+    dns_domain    = "example.internal"
   }
 }
 
-vm_guest_passwords = {
-  netbox-01 = "replace-with-guest-password"
-}
-
 vcenter_allow_unverified_ssl = false
+vault_skip_tls_verify       = false

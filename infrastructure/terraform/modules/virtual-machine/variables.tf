@@ -105,19 +105,3 @@ variable "dns_domain" {
   description = "Guest DNS search domain."
   type        = string
 }
-
-variable "guest_username" {
-  description = "Guest operating system username."
-  type        = string
-}
-
-variable "guest_password" {
-  description = "Guest operating system password."
-  type        = string
-  sensitive   = true
-}
-
-variable "ssh_authorized_keys" {
-  description = "SSH public keys for the guest user."
-  type        = list(string)
-}

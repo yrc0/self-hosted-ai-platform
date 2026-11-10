@@ -25,3 +25,14 @@ generated/
 .vscode/
 *.swp
 *.swo
+
+# Ansible local secrets and generated files
+*.retry
+infrastructure/ansible/.vault-password
+infrastructure/ansible/*/vault-password
+infrastructure/ansible/**/*.vault.yml
+infrastructure/ansible/inventories/*/group_vars/vault.local.yml
+infrastructure/ansible/inventory/group_vars/vault.local.yml
+infrastructure/ansible/inventory/group_vars/all/vault.local.yml
+infrastructure/ansible/.venv/
+infrastructure/ansible/vault.local.yml

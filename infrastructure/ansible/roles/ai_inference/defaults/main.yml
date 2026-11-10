@@ -1,0 +1,11 @@
+model_mount_path: "/srv/ai/models"
+model_disk_min_bytes: 180000000000
+model_disk_max_bytes: 220000000000
+
+ollama_service_name: ollama
+ollama_models:
+  - "qwen3:8b"
+ollama_num_parallel: 2
+ollama_max_loaded_models: 1
+ollama_keep_alive: "5m"
+ollama_inference_timeout: 300

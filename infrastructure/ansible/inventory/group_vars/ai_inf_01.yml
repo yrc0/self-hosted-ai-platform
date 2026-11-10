@@ -1,0 +1,13 @@
+vault_bootstrap_secret_path: "infrastructure/vms/bootstrap_user"
+vault_secret_path: "infrastructure/vms/ai-inf-01"
+vault_validate_certs: false
+
+model_disk_min_bytes: 180000000000
+model_disk_max_bytes: 220000000000
+model_mount_path: "/srv/ai/models"
+
+ollama_models:
+  - "qwen3:8b"
+ollama_num_parallel: 2
+ollama_max_loaded_models: 1
+ollama_keep_alive: "5m"

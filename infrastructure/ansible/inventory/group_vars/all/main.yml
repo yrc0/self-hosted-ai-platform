@@ -1,0 +1,4 @@
+vault_addr: "https://172.30.30.8:8200"
+vault_auth_method: "approle"
+vault_engine_mount: "secret"
+vault_validate_certs: false

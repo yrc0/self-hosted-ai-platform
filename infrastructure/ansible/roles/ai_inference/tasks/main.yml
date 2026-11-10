@@ -1,0 +1,232 @@
+- name: Validate the Vault credential shape
+  ansible.builtin.assert:
+    that:
+      - managed_guest_username is defined
+      - managed_guest_password is defined
+      - managed_guest_username | length > 0
+      - managed_guest_password | length > 0
+    fail_msg: "Vault secret must contain non-empty username and password fields."
+  no_log: true
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 600
+
+- name: Install host prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - open-vm-tools
+      - parted
+    state: present
+    lock_timeout: 600
+
+- name: Ensure the managed guest user exists
+  ansible.builtin.user:
+    name: "{{ managed_guest_username }}"
+    password: "{{ managed_guest_password | password_hash('sha512') }}"
+    shell: /bin/bash
+    create_home: true
+    groups:
+      - sudo
+    append: true
+    password_lock: false
+    update_password: on_create
+  no_log: true
+
+- name: Ensure the Ollama service account exists
+  ansible.builtin.user:
+    name: ollama
+    system: true
+    shell: /usr/sbin/nologin
+    home: /usr/share/ollama
+    create_home: true
+
+- name: Inspect block devices
+  ansible.builtin.command:
+    cmd: lsblk --json --bytes --tree --output NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+  register: block_devices
+  changed_when: false
+
+- name: Select the dedicated model disk by size
+  ansible.builtin.set_fact:
+    model_disk_candidates: >-
+      {{
+        (block_devices.stdout | from_json).blockdevices
+        | selectattr('type', 'equalto', 'disk')
+        | selectattr('size', '>=', model_disk_min_bytes)
+        | selectattr('size', '<=', model_disk_max_bytes)
+        | list
+      }}
+
+- name: Refuse unsafe model-disk selection
+  ansible.builtin.assert:
+    that:
+      - model_disk_candidates | length == 1
+      - >-
+        (model_disk_candidates[0].children | default([], true) | length == 0)
+        or (
+          model_disk_candidates[0].children | length == 1
+          and model_disk_candidates[0].children[0].type == 'part'
+          and model_disk_candidates[0].children[0].fstype == 'ext4'
+          and model_disk_candidates[0].children[0].mountpoint == model_mount_path
+        )
+      - model_disk_candidates[0].fstype | default(none) is none
+      - model_disk_candidates[0].mountpoint | default(none) is none
+    fail_msg: >-
+      Refusing to format a disk. Expected exactly one empty disk or the
+      previously managed ext4 disk mounted at {{ model_mount_path }} between
+      {{ model_disk_min_bytes }} and {{ model_disk_max_bytes }} bytes; found
+      {{ model_disk_candidates | length }} candidate(s).
+
+- name: Set the model disk device
+  ansible.builtin.set_fact:
+    model_disk_device: "/dev/{{ model_disk_candidates[0].name }}"
+    model_partition_device: >-
+      /dev/{{ model_disk_candidates[0].name }}{{
+        'p1' if model_disk_candidates[0].name is match('^nvme') else '1'
+      }}
+
+- name: Create a GPT partition on the empty model disk
+  community.general.parted:
+    device: "{{ model_disk_device }}"
+    label: gpt
+    number: 1
+    part_start: 0%
+    part_end: 100%
+    state: present
+
+- name: Wait for the model partition device
+  ansible.builtin.wait_for:
+    path: "{{ model_partition_device }}"
+    state: present
+    timeout: 30
+
+- name: Create an ext4 filesystem on the new model partition
+  community.general.filesystem:
+    dev: "{{ model_partition_device }}"
+    fstype: ext4
+    force: false
+
+- name: Read the model filesystem UUID
+  ansible.builtin.command:
+    cmd: blkid -s UUID -o value {{ model_partition_device }}
+  register: model_disk_uuid
+  changed_when: false
+
+- name: Ensure the model mount directory exists
+  ansible.builtin.file:
+    path: "{{ model_mount_path }}"
+    state: directory
+    owner: ollama
+    group: ollama
+    mode: "0750"
+
+- name: Mount the model filesystem by UUID
+  ansible.posix.mount:
+    path: "{{ model_mount_path }}"
+    src: "UUID={{ model_disk_uuid.stdout }}"
+    fstype: ext4
+    opts: defaults
+    dump: "0"
+    passno: "2"
+    state: mounted
+
+- name: Ensure Ollama owns the model directory
+  ansible.builtin.file:
+    path: "{{ model_mount_path }}"
+    state: directory
+    owner: ollama
+    group: ollama
+    mode: "0750"
+
+- name: Download the Ollama installer
+  ansible.builtin.get_url:
+    url: https://ollama.com/install.sh
+    dest: /usr/local/src/ollama-install.sh
+    mode: "0700"
+
+- name: Install Ollama
+  ansible.builtin.command:
+    cmd: /usr/local/src/ollama-install.sh
+    creates: /usr/local/bin/ollama
+
+- name: Configure Ollama service settings
+  ansible.builtin.file:
+    path: /etc/systemd/system/ollama.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Ollama service settings
+  ansible.builtin.template:
+    src: ollama-override.conf.j2
+    dest: /etc/systemd/system/ollama.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Ollama
+
+- name: Ensure Ollama is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ ollama_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Flush Ollama service handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Ollama API
+  ansible.builtin.uri:
+    url: http://127.0.0.1:11434/api/tags
+    method: GET
+    status_code: 200
+  register: ollama_health
+  retries: 12
+  delay: 5
+  until: ollama_health.status == 200
+
+- name: Download configured Ollama models
+  ansible.builtin.command:
+    cmd: "runuser --user ollama -- ollama pull {{ item }}"
+  environment:
+    OLLAMA_HOST: "127.0.0.1:11434"
+  loop: "{{ ollama_models }}"
+  register: ollama_pull
+  changed_when: "'success' in ollama_pull.stdout | lower"
+
+- name: Verify configured Ollama models are installed
+  ansible.builtin.command:
+    cmd: runuser --user ollama -- ollama list
+  environment:
+    OLLAMA_HOST: "127.0.0.1:11434"
+  register: ollama_model_list
+  changed_when: false
+  failed_when: item not in ollama_model_list.stdout
+  loop: "{{ ollama_models }}"
+
+- name: Send a Qwen3 test prompt
+  ansible.builtin.uri:
+    url: http://127.0.0.1:11434/api/generate
+    method: POST
+    body_format: json
+    body:
+      model: "{{ item }}"
+      prompt: "Reply with exactly: inference-ready"
+      stream: false
+    status_code: 200
+    return_content: true
+    timeout: "{{ ollama_inference_timeout }}"
+  register: ollama_test
+  retries: 3
+  delay: 5
+  until:
+    - ollama_test.status == 200
+    - ollama_test.json.response is defined
+    - ollama_test.json.response | length > 0
+  loop: "{{ ollama_models }}"
