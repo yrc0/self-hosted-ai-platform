@@ -1,7 +1,7 @@
 # Ansible
 
-Each VM has its own inventory group, group-vars file, and playbook. The
-current VM is `ai-inf-01`; future VMs use the same standard structure.
+Hosts are grouped by workload. The current inference server is `ai-inf-01`;
+future inference VMs can be added to the same `inference` group.
 
 ```text
 ansible/
@@ -16,9 +16,11 @@ ansible/
 │       │   └── vault.local.yml       # ignored AppRole credentials
 │       ├── ai_inf_01.yml
 ├── playbooks/
-│   └── ai-inf-01.yml
+│   └── inference.yml
 └── roles/
-    └── ai_inference/
+    ├── linux_baseline/
+    ├── model_storage/
+    └── ollama/
 ```
 
 ## Vault
@@ -54,7 +56,7 @@ secret/infrastructure/vms/ai-inf-01
 
 Both secrets must contain `username` and `password`.
 
-## Run ai-inf-01
+## Run inference servers
 
 From this directory:
 
@@ -64,7 +66,7 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ansible-galaxy collection install -r requirements.yml
 ansible all -m ping
-ansible-playbook playbooks/ai-inf-01.yml
+ansible-playbook playbooks/inference.yml
 ```
 
 Use the project virtual environment for every Ansible command. It avoids the
@@ -72,28 +74,28 @@ Homebrew Python 3.15 runtime. The inventory helper reads the bootstrap
 credentials from Vault with `hvac`; they are kept ephemeral and are not written
 to inventory files.
 
-The playbook connects with the Vault-provided `itadmin` bootstrap account,
-creates the Vault-provided application user, configures the model disk, and
-installs and verifies Ollama with `qwen3:8b`.
+The playbook connects with the Vault-provided `itadmin` bootstrap account and
+uses three focused roles: `linux_baseline` creates the managed sudo user and
+installs prerequisites, `model_storage` safely configures the model disk, and
+`ollama` installs and verifies Ollama with `qwen3:8b`.
 
 The model-disk tasks fail closed unless exactly one unmounted,
 unpartitioned disk between 180 GB and 220 GB is found. Existing disks are
 never automatically formatted.
 
-## Adding another VM
+## Adding another inference VM
 
-Add the VM to `inventory/hosts.yml` under its own group:
+Add the VM under the `inference` group in `inventory/hosts.yml`:
 
 ```yaml
 all:
   children:
-    another_vm:
+    inference:
       hosts:
         another-vm:
           ansible_host: 172.30.30.122
 ```
 
-Add `inventory/group_vars/another_vm.yml` for that VM's configuration and
-create `playbooks/another-vm.yml`. Keep that VM's address, Vault paths, and
-workload-specific settings in its own group-vars file. Reuse a role only when
-the VM has the same workload requirements as `ai-inf-01`.
+Add `inventory/group_vars/another_vm.yml` for VM-specific Vault paths and
+storage settings. No new playbook is needed when the VM has the same inference
+workload.

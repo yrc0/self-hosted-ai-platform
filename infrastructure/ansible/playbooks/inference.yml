@@ -1,0 +1,7 @@
+- name: Configure inference servers
+  hosts: inference
+  become: true
+  roles:
+    - linux_baseline
+    - model_storage
+    - ollama

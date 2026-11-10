@@ -1,0 +1,87 @@
+- name: Download the Ollama installer
+  ansible.builtin.get_url:
+    url: https://ollama.com/install.sh
+    dest: /usr/local/src/ollama-install.sh
+    mode: "0700"
+
+- name: Install Ollama
+  ansible.builtin.command:
+    cmd: /usr/local/src/ollama-install.sh
+    creates: /usr/local/bin/ollama
+
+- name: Configure Ollama service settings
+  ansible.builtin.file:
+    path: /etc/systemd/system/ollama.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Ollama service settings
+  ansible.builtin.template:
+    src: ollama-override.conf.j2
+    dest: /etc/systemd/system/ollama.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Ollama
+
+- name: Ensure Ollama is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ ollama_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Flush Ollama service handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Ollama API
+  ansible.builtin.uri:
+    url: http://127.0.0.1:11434/api/tags
+    method: GET
+    status_code: 200
+  register: ollama_health
+  retries: 12
+  delay: 5
+  until: ollama_health.status == 200
+
+- name: Download configured Ollama models
+  ansible.builtin.command:
+    cmd: "runuser --user ollama -- ollama pull {{ item }}"
+  environment:
+    OLLAMA_HOST: "127.0.0.1:11434"
+  loop: "{{ ollama_models }}"
+  register: ollama_pull
+  changed_when: "'success' in ollama_pull.stdout | lower"
+
+- name: Verify configured Ollama models are installed
+  ansible.builtin.command:
+    cmd: runuser --user ollama -- ollama list
+  environment:
+    OLLAMA_HOST: "127.0.0.1:11434"
+  register: ollama_model_list
+  changed_when: false
+  failed_when: item not in ollama_model_list.stdout
+  loop: "{{ ollama_models }}"
+
+- name: Send a test prompt
+  ansible.builtin.uri:
+    url: http://127.0.0.1:11434/api/generate
+    method: POST
+    body_format: json
+    body:
+      model: "{{ item }}"
+      prompt: "Reply with exactly: inference-ready"
+      stream: false
+    status_code: 200
+    return_content: true
+    timeout: "{{ ollama_inference_timeout }}"
+  register: ollama_test
+  retries: 3
+  delay: 5
+  until:
+    - ollama_test.status == 200
+    - ollama_test.json.response is defined
+    - ollama_test.json.response | length > 0
+  loop: "{{ ollama_models }}"

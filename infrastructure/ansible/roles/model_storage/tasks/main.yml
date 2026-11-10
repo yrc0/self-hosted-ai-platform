@@ -1,0 +1,97 @@
+- name: Inspect block devices
+  ansible.builtin.command:
+    cmd: lsblk --json --bytes --tree --output NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+  register: block_devices
+  changed_when: false
+
+- name: Select the dedicated model disk by size
+  ansible.builtin.set_fact:
+    model_disk_candidates: >-
+      {{
+        (block_devices.stdout | from_json).blockdevices
+        | selectattr('type', 'equalto', 'disk')
+        | selectattr('size', '>=', model_disk_min_bytes)
+        | selectattr('size', '<=', model_disk_max_bytes)
+        | list
+      }}
+
+- name: Refuse unsafe model-disk selection
+  ansible.builtin.assert:
+    that:
+      - model_disk_candidates | length == 1
+      - >-
+        (model_disk_candidates[0].children | default([], true) | length == 0)
+        or (
+          model_disk_candidates[0].children | length == 1
+          and model_disk_candidates[0].children[0].type == 'part'
+          and model_disk_candidates[0].children[0].fstype == 'ext4'
+          and model_disk_candidates[0].children[0].mountpoint == model_mount_path
+        )
+      - model_disk_candidates[0].fstype | default(none) is none
+      - model_disk_candidates[0].mountpoint | default(none) is none
+    fail_msg: >-
+      Refusing to format a disk. Expected exactly one empty disk or the
+      previously managed ext4 disk mounted at {{ model_mount_path }} between
+      {{ model_disk_min_bytes }} and {{ model_disk_max_bytes }} bytes; found
+      {{ model_disk_candidates | length }} candidate(s).
+
+- name: Set the model disk device
+  ansible.builtin.set_fact:
+    model_disk_device: "/dev/{{ model_disk_candidates[0].name }}"
+    model_partition_device: >-
+      /dev/{{ model_disk_candidates[0].name }}{{
+        'p1' if model_disk_candidates[0].name is match('^nvme') else '1'
+      }}
+
+- name: Create a GPT partition on the empty model disk
+  community.general.parted:
+    device: "{{ model_disk_device }}"
+    label: gpt
+    number: 1
+    part_start: 0%
+    part_end: 100%
+    state: present
+
+- name: Wait for the model partition device
+  ansible.builtin.wait_for:
+    path: "{{ model_partition_device }}"
+    state: present
+    timeout: 30
+
+- name: Create an ext4 filesystem on the new model partition
+  community.general.filesystem:
+    dev: "{{ model_partition_device }}"
+    fstype: ext4
+    force: false
+
+- name: Read the model filesystem UUID
+  ansible.builtin.command:
+    cmd: blkid -s UUID -o value {{ model_partition_device }}
+  register: model_disk_uuid
+  changed_when: false
+
+- name: Ensure the model mount directory exists
+  ansible.builtin.file:
+    path: "{{ model_mount_path }}"
+    state: directory
+    owner: ollama
+    group: ollama
+    mode: "0750"
+
+- name: Mount the model filesystem by UUID
+  ansible.posix.mount:
+    path: "{{ model_mount_path }}"
+    src: "UUID={{ model_disk_uuid.stdout }}"
+    fstype: ext4
+    opts: defaults
+    dump: "0"
+    passno: "2"
+    state: mounted
+
+- name: Ensure Ollama owns the model directory
+  ansible.builtin.file:
+    path: "{{ model_mount_path }}"
+    state: directory
+    owner: ollama
+    group: ollama
+    mode: "0750"

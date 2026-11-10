@@ -1,0 +1,46 @@
+- name: Validate the managed user credentials
+  ansible.builtin.assert:
+    that:
+      - managed_guest_username is defined
+      - managed_guest_password is defined
+      - managed_guest_username | length > 0
+      - managed_guest_password | length > 0
+    fail_msg: "Vault secret must contain non-empty username and password fields."
+  no_log: true
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 600
+
+- name: Install host prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - open-vm-tools
+      - parted
+    state: present
+    lock_timeout: 600
+
+- name: Ensure the managed guest user exists
+  ansible.builtin.user:
+    name: "{{ managed_guest_username }}"
+    password: "{{ managed_guest_password | password_hash('sha512') }}"
+    shell: /bin/bash
+    create_home: true
+    groups:
+      - sudo
+    append: true
+    password_lock: false
+    update_password: on_create
+  no_log: true
+
+- name: Ensure the Ollama service account exists
+  ansible.builtin.user:
+    name: ollama
+    system: true
+    shell: /usr/sbin/nologin
+    home: /usr/share/ollama
+    create_home: true

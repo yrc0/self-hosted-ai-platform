@@ -1,5 +1,0 @@
-- name: Configure ai-inf-01
-  hosts: ai_inf_01
-  become: true
-  roles:
-    - ai_inference
