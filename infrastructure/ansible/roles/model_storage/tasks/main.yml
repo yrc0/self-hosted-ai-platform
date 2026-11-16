@@ -1,3 +1,11 @@
+- name: Ensure the Ollama service account exists
+  ansible.builtin.user:
+    name: ollama
+    system: true
+    shell: /usr/sbin/nologin
+    home: /usr/share/ollama
+    create_home: true
+
 - name: Inspect block devices
   ansible.builtin.command:
     cmd: lsblk --json --bytes --tree --output NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT

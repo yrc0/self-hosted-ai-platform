@@ -1,0 +1,11 @@
+vault_bootstrap_secret_path: "infrastructure/vms/bootstrap_user"
+vault_secret_path: "infrastructure/vms/ai-app-01"
+vault_validate_certs: false
+
+ollama_server_host: "172.30.30.121"
+ollama_server_port: 11434
+ollama_model: "qwen3:8b"
+
+open_webui_deployment_path: "/opt/ai/open-webui"
+open_webui_image: "ghcr.io/open-webui/open-webui:main"
+open_webui_port: 3000

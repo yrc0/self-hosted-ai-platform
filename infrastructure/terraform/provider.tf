@@ -9,6 +9,7 @@ provider "vsphere" {
 
 provider "vault" {
   address          = var.vault_address
+  skip_tls_verify  = var.vault_skip_tls_verify
   skip_child_token = true
 
   auth_login {

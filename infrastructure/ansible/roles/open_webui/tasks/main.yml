@@ -1,0 +1,44 @@
+- name: Verify application VM can reach Ollama
+  ansible.builtin.uri:
+    url: "http://{{ ollama_server_host }}:{{ ollama_server_port }}/api/tags"
+    method: GET
+    status_code: 200
+    timeout: 10
+
+- name: Create Open WebUI deployment directory
+  ansible.builtin.file:
+    path: "{{ open_webui_deployment_path }}/data"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Open WebUI Compose configuration
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ open_webui_deployment_path }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Pull and start Open WebUI
+  become: true
+  ansible.builtin.command:
+    cmd: docker compose up --detach
+    chdir: "{{ open_webui_deployment_path }}"
+  register: open_webui_compose
+  changed_when: >-
+    'Started' in open_webui_compose.stdout
+    or 'Created' in open_webui_compose.stdout
+    or 'Pulled' in open_webui_compose.stdout
+
+- name: Verify Open WebUI health
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ open_webui_port }}/health"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: open_webui_health
+  retries: 12
+  delay: 10
+  until: open_webui_health.status == 200

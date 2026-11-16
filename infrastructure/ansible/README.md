@@ -56,6 +56,9 @@ secret/infrastructure/vms/ai-inf-01
 
 Both secrets must contain `username` and `password`.
 
+`ai-app-01` uses the bootstrap secret for its SSH and managed sudo user, so
+no additional application-user secret is required.
+
 ## Run inference servers
 
 From this directory:
@@ -99,3 +102,15 @@ all:
 Add `inventory/group_vars/another_vm.yml` for VM-specific Vault paths and
 storage settings. No new playbook is needed when the VM has the same inference
 workload.
+
+## Run application servers
+
+Open WebUI uses the reusable Docker and Open WebUI roles:
+
+```sh
+ansible-playbook playbooks/application.yml
+```
+
+Before deployment, the application VM verifies access to Ollama at
+`172.30.30.121:11434`. The inference role binds Ollama to the VM network and
+allows port 11434 only from `172.30.30.122` through UFW.

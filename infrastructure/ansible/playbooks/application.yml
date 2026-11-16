@@ -1,0 +1,7 @@
+- name: Configure application servers
+  hosts: applications
+  become: true
+  roles:
+    - linux_baseline
+    - docker
+    - open_webui

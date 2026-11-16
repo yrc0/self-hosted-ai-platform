@@ -21,8 +21,13 @@
       - curl
       - open-vm-tools
       - parted
+      - tzdata
     state: present
     lock_timeout: 600
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ linux_timezone }}"
 
 - name: Ensure the managed guest user exists
   ansible.builtin.user:
@@ -36,11 +41,3 @@
     password_lock: false
     update_password: on_create
   no_log: true
-
-- name: Ensure the Ollama service account exists
-  ansible.builtin.user:
-    name: ollama
-    system: true
-    shell: /usr/sbin/nologin
-    home: /usr/share/ollama
-    create_home: true

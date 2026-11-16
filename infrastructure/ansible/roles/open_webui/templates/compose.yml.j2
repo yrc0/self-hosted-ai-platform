@@ -1,0 +1,11 @@
+services:
+  open-webui:
+    image: {{ open_webui_image }}
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "{{ open_webui_port }}:8080"
+    environment:
+      OLLAMA_BASE_URL: "http://{{ ollama_server_host }}:{{ ollama_server_port }}"
+    volumes:
+      - "{{ open_webui_deployment_path }}/data:/app/backend/data"

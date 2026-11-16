@@ -1,3 +1,26 @@
+- name: Install firewall package
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    lock_timeout: 600
+
+- name: Allow SSH through the firewall
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Allow Ollama only from the application VM
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ ollama_allowed_client_ip }}"
+    to_port: "11434"
+    proto: tcp
+
+- name: Enable the firewall
+  community.general.ufw:
+    state: enabled
+    policy: deny
+
 - name: Download the Ollama installer
   ansible.builtin.get_url:
     url: https://ollama.com/install.sh

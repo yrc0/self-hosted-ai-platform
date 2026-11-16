@@ -34,6 +34,12 @@ variable "vault_address" {
   type        = string
 }
 
+variable "vault_skip_tls_verify" {
+  description = "Whether to skip Vault TLS certificate verification."
+  type        = bool
+  default     = false
+}
+
 variable "vault_role_id" {
   description = "Vault AppRole role ID."
   type        = string

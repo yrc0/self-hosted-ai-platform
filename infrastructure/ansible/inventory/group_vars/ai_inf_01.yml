@@ -11,3 +11,4 @@ ollama_models:
 ollama_num_parallel: 2
 ollama_max_loaded_models: 1
 ollama_keep_alive: "5m"
+ollama_allowed_client_ip: "172.30.30.122"
