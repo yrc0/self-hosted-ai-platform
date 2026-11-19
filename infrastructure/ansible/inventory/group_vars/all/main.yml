@@ -2,3 +2,6 @@ vault_addr: "https://172.30.30.8:8200"
 vault_auth_method: "approle"
 vault_engine_mount: "secret"
 vault_validate_certs: false
+
+monitoring_zabbix_server_ip: "172.30.30.21"
+monitoring_prometheus_server_ip: "172.30.30.22"

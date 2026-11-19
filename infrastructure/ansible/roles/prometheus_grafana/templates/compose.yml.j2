@@ -1,0 +1,32 @@
+services:
+  prometheus:
+    image: {{ prometheus_image }}
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time={{ prometheus_retention }}
+      - --web.enable-lifecycle
+    ports:
+      - "{{ prometheus_port }}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+
+  grafana:
+    image: {{ grafana_image }}
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    env_file:
+      - path: ./grafana.env
+        format: raw
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "{{ grafana_port }}:3000"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources:ro

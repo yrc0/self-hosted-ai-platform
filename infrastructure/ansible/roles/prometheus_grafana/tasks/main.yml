@@ -1,0 +1,104 @@
+- name: Validate Grafana admin credentials are non-empty, single-line strings
+  ansible.builtin.assert:
+    that:
+      - grafana_admin_username is defined
+      - grafana_admin_password is defined
+      - grafana_admin_username is string
+      - grafana_admin_password is string
+      - grafana_admin_username | length > 0
+      - grafana_admin_password | length > 0
+      - "'\\n' not in grafana_admin_username"
+      - "'\\r' not in grafana_admin_username"
+      - "'\\n' not in grafana_admin_password"
+      - "'\\r' not in grafana_admin_password"
+    fail_msg: "Vault secret secret/infrastructure/vms/mon-metrics-01/grafana must contain non-empty, single-line username and password strings."
+  no_log: true
+
+- name: Create metrics deployment directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode | default('0750') }}"
+  loop:
+    - { path: "{{ metrics_deployment_path }}", owner: "0" }
+    # Grafana must traverse these directories inside its read-only bind mount.
+    - { path: "{{ metrics_deployment_path }}/provisioning", owner: "0", mode: "0755" }
+    - { path: "{{ metrics_deployment_path }}/provisioning/datasources", owner: "0", mode: "0755" }
+    # Container users: Prometheus runs as nobody (65534), Grafana as 472.
+    - { path: "{{ metrics_deployment_path }}/data/prometheus", owner: "65534" }
+    - { path: "{{ metrics_deployment_path }}/data/grafana", owner: "472" }
+
+- name: Install Grafana admin credentials
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ metrics_deployment_path }}/grafana.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ metrics_deployment_path }}/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Prometheus
+
+- name: Install Grafana datasource provisioning
+  ansible.builtin.template:
+    src: grafana-datasource.yml.j2
+    dest: "{{ metrics_deployment_path }}/provisioning/datasources/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install metrics Compose configuration
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ metrics_deployment_path }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Pull Prometheus and Grafana images
+  ansible.builtin.command:
+    cmd: docker compose pull --quiet
+    chdir: "{{ metrics_deployment_path }}"
+  register: metrics_pull
+  retries: 3
+  delay: 10
+  until: metrics_pull.rc == 0
+  changed_when: false
+
+- name: Start Prometheus and Grafana
+  ansible.builtin.command:
+    cmd: docker compose up --detach
+    chdir: "{{ metrics_deployment_path }}"
+  register: metrics_compose
+  changed_when: >-
+    'Started' in metrics_compose.stderr
+    or 'Recreated' in metrics_compose.stderr
+
+- name: Verify Prometheus health
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ prometheus_port }}/-/ready"
+    status_code: 200
+    timeout: 10
+  register: prometheus_health
+  retries: 12
+  delay: 10
+  until: prometheus_health.status == 200
+
+- name: Verify Grafana health
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ grafana_port }}/api/health"
+    status_code: 200
+    timeout: 10
+  register: grafana_health
+  retries: 12
+  delay: 10
+  until: grafana_health.status == 200

@@ -1,0 +1,6 @@
+zabbix_agent_server_ip: "{{ monitoring_zabbix_server_ip }}"
+zabbix_agent_port: 10050
+zabbix_agent_hostname: "{{ inventory_hostname }}"
+# Matched by a Zabbix autoregistration action to add hosts automatically.
+zabbix_agent_host_metadata: "linux"
+zabbix_agent_config_path: "/etc/zabbix/zabbix_agent2.conf"

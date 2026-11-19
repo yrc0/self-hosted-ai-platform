@@ -1,0 +1,6 @@
+zabbix_deployment_path: "/opt/monitoring/zabbix"
+zabbix_version: "7.0"
+zabbix_postgres_image: "postgres:16-alpine"
+zabbix_web_port: 80
+zabbix_server_port: 10051
+zabbix_timezone: "{{ linux_timezone | default('America/New_York') }}"

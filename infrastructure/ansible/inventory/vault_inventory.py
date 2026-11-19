@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 import sys
 
-import hvac
-import yaml
-import urllib3
+import hvac  # type: ignore[reportMissingModuleSource]
+import yaml  # type: ignore[reportMissingModuleSource]
+import urllib3  # type: ignore[reportMissingImports]
 
 
 ROOT = Path(__file__).parent
@@ -76,6 +76,26 @@ def inventory() -> dict:
             "managed_guest_username": managed_secret["username"],
             "managed_guest_password": managed_secret["password"],
         }
+
+        # Application secrets are exposed as <prefix>_<secret key> host variables.
+        for _name, variables in groups:
+            for prefix, path in (variables.get("vault_app_secrets") or {}).items():
+                # A missing app secret must not break inventory for every host;
+                # the consuming role asserts its variables are defined.
+                try:
+                    app_secret = client.secrets.kv.v2.read_secret_version(
+                        mount_point=shared["vault_engine_mount"],
+                        path=path,
+                        raise_on_deleted_version=True,
+                    )["data"]["data"]
+                except hvac.exceptions.InvalidPath:
+                    print(
+                        f"Vault secret {path} for {host_name} not found; roles that need it will fail",
+                        file=sys.stderr,
+                    )
+                    continue
+                for key, value in app_secret.items():
+                    hostvars[host_name][f"{prefix}_{key}"] = value
 
     groups = {}
     for host_name, memberships in host_groups.items():

@@ -52,6 +52,12 @@ variable "vault_secret_id" {
   sensitive   = true
 }
 
+variable "vm_folders" {
+  description = "vSphere VM folders that Terraform creates and manages."
+  type        = list(string)
+  default     = []
+}
+
 variable "vms" {
   description = "Virtual machines to create, keyed by their vSphere VM name."
   type = map(object({
