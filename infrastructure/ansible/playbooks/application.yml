@@ -5,3 +5,5 @@
     - linux_baseline
     - docker
     - open_webui
+    - node_exporter
+    - zabbix_agent

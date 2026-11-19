@@ -1,0 +1,44 @@
+- name: Install Zabbix agent 2 and ufw
+  ansible.builtin.apt:
+    name:
+      - zabbix-agent2
+      - ufw
+    state: present
+    lock_timeout: 600
+
+- name: Configure Zabbix agent 2
+  ansible.builtin.lineinfile:
+    path: "{{ zabbix_agent_config_path }}"
+    regexp: "^#?\\s*{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: "Server", value: "{{ zabbix_agent_server_ip }}" }
+    - { key: "ServerActive", value: "{{ zabbix_agent_server_ip }}" }
+    - { key: "Hostname", value: "{{ zabbix_agent_hostname }}" }
+    - { key: "HostMetadata", value: "{{ zabbix_agent_host_metadata }}" }
+    - { key: "ListenPort", value: "{{ zabbix_agent_port }}" }
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Restart Zabbix agent
+
+- name: Enable and start Zabbix agent 2
+  ansible.builtin.systemd:
+    name: zabbix-agent2
+    enabled: true
+    state: started
+
+- name: Flush Zabbix agent handlers
+  ansible.builtin.meta: flush_handlers
+
+# Takes effect on hosts where ufw is enabled (e.g. the inference VM).
+- name: Allow Zabbix agent only from the Zabbix server
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ zabbix_agent_server_ip }}"
+    to_port: "{{ zabbix_agent_port | string }}"
+    proto: tcp
+
+- name: Verify Zabbix agent 2 is listening
+  ansible.builtin.wait_for:
+    port: "{{ zabbix_agent_port }}"
+    timeout: 30

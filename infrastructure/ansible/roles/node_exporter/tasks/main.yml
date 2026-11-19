@@ -1,0 +1,31 @@
+- name: Install node_exporter and ufw
+  ansible.builtin.apt:
+    name:
+      - prometheus-node-exporter
+      - ufw
+    state: present
+    lock_timeout: 600
+
+- name: Enable and start node_exporter
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+
+# Takes effect on hosts where ufw is enabled (e.g. the inference VM).
+- name: Allow node_exporter only from Prometheus
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ node_exporter_allowed_ip }}"
+    to_port: "{{ node_exporter_port | string }}"
+    proto: tcp
+
+- name: Verify node_exporter metrics
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+    status_code: 200
+    timeout: 10
+  register: node_exporter_health
+  retries: 6
+  delay: 5
+  until: node_exporter_health.status == 200

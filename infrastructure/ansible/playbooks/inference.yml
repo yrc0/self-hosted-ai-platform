@@ -5,3 +5,5 @@
     - linux_baseline
     - model_storage
     - ollama
+    - node_exporter
+    - zabbix_agent

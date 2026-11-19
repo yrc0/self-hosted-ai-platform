@@ -6,6 +6,8 @@ vcenter_network    = "network-or-port-group-name"
 
 vault_address = "https://vault.example.internal:8200"
 
+vm_folders = ["Monitoring"]
+
 vms = {
   example-vm-01 = {
     template      = "Templates/ubuntu-server-template"

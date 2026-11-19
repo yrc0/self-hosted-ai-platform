@@ -1,0 +1,62 @@
+- name: Create Zabbix deployment directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ zabbix_deployment_path }}"
+    - "{{ zabbix_deployment_path }}/data"
+    - "{{ zabbix_deployment_path }}/data/postgres"
+
+# The database password is generated once on the host and never leaves it.
+- name: Generate the Zabbix database secret
+  ansible.builtin.shell:
+    cmd: umask 077 && printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > .env
+    chdir: "{{ zabbix_deployment_path }}"
+    creates: "{{ zabbix_deployment_path }}/.env"
+
+- name: Install Zabbix Compose configuration
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ zabbix_deployment_path }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Pull Zabbix images
+  ansible.builtin.command:
+    cmd: docker compose pull --quiet
+    chdir: "{{ zabbix_deployment_path }}"
+  register: zabbix_pull
+  retries: 3
+  delay: 10
+  until: zabbix_pull.rc == 0
+  changed_when: false
+
+- name: Start Zabbix
+  ansible.builtin.command:
+    cmd: docker compose up --detach --wait --wait-timeout 300
+    chdir: "{{ zabbix_deployment_path }}"
+  register: zabbix_compose
+  changed_when: >-
+    'Started' in zabbix_compose.stderr
+    or 'Recreated' in zabbix_compose.stderr
+
+- name: Wait for the Zabbix server trapper port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ zabbix_server_port }}"
+    timeout: 180
+
+- name: Verify the Zabbix web frontend
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ zabbix_web_port }}/"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: zabbix_web_health
+  retries: 18
+  delay: 10
+  until: zabbix_web_health.status == 200

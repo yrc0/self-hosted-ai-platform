@@ -1,0 +1,3 @@
+vault_bootstrap_secret_path: "infrastructure/vms/bootstrap_user"
+vault_use_bootstrap_user: true
+vault_validate_certs: false

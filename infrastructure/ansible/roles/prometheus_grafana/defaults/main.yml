@@ -1,0 +1,8 @@
+metrics_deployment_path: "/opt/monitoring/metrics"
+prometheus_image: "prom/prometheus:latest"
+grafana_image: "grafana/grafana-oss:latest"
+prometheus_port: 9090
+grafana_port: 3000
+prometheus_retention: "30d"
+prometheus_scrape_interval: "30s"
+node_exporter_port: 9100

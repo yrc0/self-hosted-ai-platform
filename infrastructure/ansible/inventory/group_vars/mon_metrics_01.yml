@@ -1,0 +1,7 @@
+vault_bootstrap_secret_path: "infrastructure/vms/bootstrap_user"
+vault_use_bootstrap_user: true
+vault_validate_certs: false
+
+# Injected as grafana_admin_username / grafana_admin_password.
+vault_app_secrets:
+  grafana_admin: "infrastructure/vms/mon-metrics-01/grafana"

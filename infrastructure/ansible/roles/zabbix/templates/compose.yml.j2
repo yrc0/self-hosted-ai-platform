@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: {{ zabbix_postgres_image }}
+    container_name: zabbix-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zabbix -d zabbix"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:ubuntu-{{ zabbix_version }}-latest
+    container_name: zabbix-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_SERVER_HOST: postgres
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "{{ zabbix_server_port }}:10051"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:ubuntu-{{ zabbix_version }}-latest
+    container_name: zabbix-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      zabbix-server:
+        condition: service_started
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      DB_SERVER_HOST: postgres
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PHP_TZ: "{{ zabbix_timezone }}"
+    ports:
+      - "{{ zabbix_web_port }}:8080"
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:ubuntu-{{ zabbix_version }}-latest
+    container_name: zabbix-agent
+    restart: unless-stopped
+    depends_on:
+      - zabbix-server
+    environment:
+      ZBX_HOSTNAME: "Zabbix server"
+      ZBX_SERVER_HOST: zabbix-server

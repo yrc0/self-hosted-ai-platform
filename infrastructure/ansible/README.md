@@ -114,3 +114,36 @@ ansible-playbook playbooks/application.yml
 Before deployment, the application VM verifies access to Ollama at
 `172.30.30.121:11434`. The inference role binds Ollama to the VM network and
 allows port 11434 only from `172.30.30.122` through UFW.
+
+## Run monitoring servers
+
+`mon-zbx-01` (Zabbix 7.0 + PostgreSQL) and `mon-metrics-01` (Prometheus +
+Grafana) run in Docker and use the bootstrap account only.
+
+Grafana admin credentials are read from Vault (`username`, `password`; both
+non-empty single-line strings):
+
+```text
+secret/infrastructure/vms/mon-metrics-01/grafana
+```
+
+The credentials are stored in a root-only file on the metrics VM. Grafana uses
+them when its database is first initialized; changing them in Vault later does
+not reset an existing Grafana password.
+
+Every playbook also installs `node_exporter` (scraped by Prometheus from
+`172.30.30.22`) and Zabbix agent 2 (reporting to `172.30.30.21`). Where ufw is
+enabled, those ports are allowed only from the monitoring servers.
+
+```sh
+ansible-playbook playbooks/monitoring.yml
+ansible-playbook playbooks/inference.yml
+ansible-playbook playbooks/application.yml
+```
+
+- Zabbix: `http://172.30.30.21` (default login `Admin` / `zabbix`; change it).
+- Prometheus: `http://172.30.30.22:9090`
+- Grafana: `http://172.30.30.22:3000`
+
+Agents send `HostMetadata=linux`. In Zabbix, create an autoregistration action
+matching that metadata to add hosts with the `Linux by Zabbix agent` template.

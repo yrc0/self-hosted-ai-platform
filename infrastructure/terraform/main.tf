@@ -1,3 +1,15 @@
+data "vsphere_datacenter" "this" {
+  name = var.vcenter_datacenter
+}
+
+resource "vsphere_folder" "vm" {
+  for_each = toset(var.vm_folders)
+
+  path          = each.value
+  type          = "vm"
+  datacenter_id = data.vsphere_datacenter.this.id
+}
+
 module "virtual_machine" {
   for_each = var.vms
 
@@ -5,7 +17,7 @@ module "virtual_machine" {
 
   name          = each.key
   template      = each.value.template
-  folder        = each.value.folder
+  folder        = try(vsphere_folder.vm[each.value.folder].path, each.value.folder)
   datacenter    = var.vcenter_datacenter
   cluster       = var.vcenter_cluster
   datastore     = var.vcenter_datastore
